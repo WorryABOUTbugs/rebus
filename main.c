@@ -142,29 +142,18 @@ typedef struct {
     const Puzzle *p;
     long long coef[REB_ALPHA];
     int digit[REB_ALPHA];
-    int used[10];
 } Ctx;
 
-static int check(const Ctx *c){
-    long long sum = 0;
-    int i;
-    for (i = 0; i < c->p->nletters; i++)
-        sum += c->coef[i] * c->digit[i];
-    return sum == 0;
-}
-
-static int dfs(Ctx *c, int k){
+static int dfs(Ctx *c, int k, unsigned used, long long sum){
     int d;
     if (k == c->p->nletters)
-        return check(c);
+        return sum == 0;
     for (d = c->p->nonzero[k] ? 1 : 0; d < 10; d++) {
-        if (c->used[d])
+        if ((used >> d) & 1u)
             continue;
-        c->used[d] = 1;
         c->digit[k] = d;
-        if (dfs(c, k + 1))
+        if (dfs(c, k + 1, used | (1u << d), sum + c->coef[k] * d))
             return 1;
-        c->used[d] = 0;
     }
     return 0;
 }
@@ -174,7 +163,7 @@ static int solve_puzzle(const Puzzle *p, int digit[REB_ALPHA]){
     memset(&c, 0, sizeof c);
     c.p = p;
     puzzle_coefs(p, c.coef);
-    if (!dfs(&c, 0))
+    if (!dfs(&c, 0, 0u, 0))
         return 0;
     memcpy(digit, c.digit, sizeof c.digit);
     return 1;
