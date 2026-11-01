@@ -125,33 +125,35 @@ static char *substitute(const char *src, const int dig26[REB_ALPHA]){
     return out;
 }
 
+static void puzzle_coefs(const Puzzle *p, long long coef[]){
+    int i, w, k;
+    for (i = 0; i < p->nletters; i++)
+        coef[i] = 0;
+    for (w = 0; w < p->nwords; w++) {
+        long long pw = 1, sign = (w < p->swords) ? 1 : -1;
+        for (k = p->len[w] - 1; k >= 0; k--) {
+            coef[p->idx[w][k]] += sign * pw;
+            pw *= 10;
+        }
+    }
+}
+
 typedef struct {
     const Puzzle *p;
+    long long coef[REB_ALPHA];
     int digit[REB_ALPHA];
     int used[10];
 } Ctx;
 
-static long long word_value(const Ctx *c, int w){
-    const Puzzle *p = c->p;
-    long long v = 0;
-    int k;
-    for (k = 0; k < p->len[w]; k++) {
-        int letter = p->lidx[p->text[w][k] - 'A'];
-        v = v * 10 + c->digit[letter];
-    }
-    return v;
-}
-
 static int check(const Ctx *c){
-    const Puzzle *p = c->p;
     long long sum = 0;
-    int w;
-    for (w = 0; w < p->nwords; w++)
-        if (p->lead_nonzero[w] && c->digit[p->lidx[p->text[w][0] - 'A']] == 0)
+    int i;
+    for (i = 0; i < c->p->nletters; i++) {
+        if (c->digit[i] == 0 && c->p->nonzero[i])
             return 0;
-    for (w = 0; w < p->swords; w++)
-        sum += word_value(c, w);
-    return sum == word_value(c, p->swords);
+        sum += c->coef[i] * c->digit[i];
+    }
+    return sum == 0;
 }
 
 static int dfs(Ctx *c, int k){
@@ -174,6 +176,7 @@ static int solve_puzzle(const Puzzle *p, int digit[REB_ALPHA]){
     Ctx c;
     memset(&c, 0, sizeof c);
     c.p = p;
+    puzzle_coefs(p, c.coef);
     if (!dfs(&c, 0))
         return 0;
     memcpy(digit, c.digit, sizeof c.digit);
