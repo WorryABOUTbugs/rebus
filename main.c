@@ -146,8 +146,30 @@ typedef struct {
 
 static int dfs(Ctx *c, int k, unsigned used, long long sum){
     int d;
-    if (k == c->p->nletters)
-        return sum == 0;
+    if (k == c->p->nletters - 1) {
+        long long cf = c->coef[k], x;
+        if (cf == 0) {
+            if (sum != 0)
+                return 0;
+            for (d = c->p->nonzero[k] ? 1 : 0; d < 10; d++)
+                if (!((used >> d) & 1u)) {
+                    c->digit[k] = d;
+                    return 1;
+                }
+            return 0;
+        }
+        if (sum % cf != 0)
+            return 0;
+        x = -sum / cf;
+        if (x < 0 || x > 9)
+            return 0;
+        if (x == 0 && c->p->nonzero[k])
+            return 0;
+        if ((used >> x) & 1u)
+            return 0;
+        c->digit[k] = (int)x;
+        return 1;
+    }
     for (d = c->p->nonzero[k] ? 1 : 0; d < 10; d++) {
         if ((used >> d) & 1u)
             continue;
