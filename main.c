@@ -125,69 +125,90 @@ static char *substitute(const char *src, const int dig26[REB_ALPHA]){
     return out;
 }
 
-static void puzzle_coefs(const Puzzle *p, long long coef[]){
-    int i, w, k;
-    for (i = 0; i < p->nletters; i++)
-        coef[i] = 0;
+typedef struct {
+    int n, ncols;
+    int order[REB_ALPHA];
+    int intro[REB_LEN];
+    int colN[REB_LEN];
+    int colL[REB_LEN][REB_WORDS];
+    int colC[REB_LEN][REB_WORDS];
+    const int *nonzero;
+    int digit[REB_ALPHA];
+} Cols;
+
+static void build(const Puzzle *p, Cols *s){
+    int cnt[REB_LEN][REB_ALPHA];
+    int placed[REB_ALPHA];
+    int w, k, c, i;
+
+    memset(cnt, 0, sizeof cnt);
+    memset(placed, 0, sizeof placed);
+    memset(s, 0, sizeof *s);
+    s->n = p->nletters;
+    s->nonzero = p->nonzero;
     for (w = 0; w < p->nwords; w++) {
-        long long pw = 1, sign = (w < p->swords) ? 1 : -1;
-        for (k = p->len[w] - 1; k >= 0; k--) {
-            coef[p->idx[w][k]] += sign * pw;
-            pw *= 10;
-        }
+        if (p->len[w] > s->ncols)
+            s->ncols = p->len[w];
+        for (k = 0; k < p->len[w]; k++)
+            cnt[p->len[w] - 1 - k][p->idx[w][k]] += (w < p->swords) ? 1 : -1;
     }
+    for (c = 0; c < s->ncols; c++) {
+        for (i = 0; i < p->nletters; i++) {
+            if (cnt[c][i] == 0)
+                continue;
+            s->colL[c][s->colN[c]] = i;
+            s->colC[c][s->colN[c]++] = cnt[c][i];
+            if (!placed[i]) {
+                placed[i] = 1;
+                s->order[s->intro[c]++] = i;
+            }
+        }
+        if (c + 1 < s->ncols)
+            s->intro[c + 1] = s->intro[c];
+    }
+    k = s->ncols ? s->intro[s->ncols - 1] : 0;
+    for (i = 0; i < p->nletters; i++)
+        if (!placed[i])
+            s->order[k++] = i;
 }
 
-typedef struct {
-    const Puzzle *p;
-    long long coef[REB_ALPHA];
-    int digit[REB_ALPHA];
-} Ctx;
-
-static int dfs(Ctx *c, int k, unsigned used, long long sum){
-    int d;
-    if (k == c->p->nletters - 1) {
-        long long cf = c->coef[k], x;
-        if (cf == 0) {
-            if (sum != 0)
-                return 0;
-            for (d = c->p->nonzero[k] ? 1 : 0; d < 10; d++)
-                if (!((used >> d) & 1u)) {
-                    c->digit[k] = d;
-                    return 1;
-                }
-            return 0;
-        }
-        if (sum % cf != 0)
-            return 0;
-        x = -sum / cf;
-        if (x < 0 || x > 9)
-            return 0;
-        if (x == 0 && c->p->nonzero[k])
-            return 0;
-        if ((used >> x) & 1u)
-            return 0;
-        c->digit[k] = (int)x;
+static int dfs(Cols *s, int j, unsigned used, int col, long long carry){
+    int letter, d;
+    if (j == s->n)
         return 1;
-    }
-    for (d = c->p->nonzero[k] ? 1 : 0; d < 10; d++) {
+    letter = s->order[j];
+    for (d = s->nonzero[letter] ? 1 : 0; d < 10; d++) {
+        int c = col, ok = 1;
+        long long cr = carry;
         if ((used >> d) & 1u)
             continue;
-        c->digit[k] = d;
-        if (dfs(c, k + 1, used | (1u << d), sum + c->coef[k] * d))
+        s->digit[letter] = d;
+        while (c < s->ncols && s->intro[c] <= j + 1) {
+            long long sum = cr;
+            int t;
+            for (t = 0; t < s->colN[c]; t++)
+                sum += (long long)s->colC[c][t] * s->digit[s->colL[c][t]];
+            if (sum % 10 != 0) {
+                ok = 0;
+                break;
+            }
+            cr = sum / 10;
+            c++;
+        }
+        if (!ok || (c == s->ncols && cr != 0))
+            continue;
+        if (dfs(s, j + 1, used | (1u << d), c, cr))
             return 1;
     }
     return 0;
 }
 
 static int solve_puzzle(const Puzzle *p, int digit[REB_ALPHA]){
-    Ctx c;
-    memset(&c, 0, sizeof c);
-    c.p = p;
-    puzzle_coefs(p, c.coef);
-    if (!dfs(&c, 0, 0u, 0))
+    Cols s;
+    build(p, &s);
+    if (!dfs(&s, 0, 0u, 0, 0))
         return 0;
-    memcpy(digit, c.digit, sizeof c.digit);
+    memcpy(digit, s.digit, sizeof(int) * (size_t)p->nletters);
     return 1;
 }
 
