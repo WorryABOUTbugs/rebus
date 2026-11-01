@@ -148,11 +148,8 @@ typedef struct {
 static int check(const Ctx *c){
     long long sum = 0;
     int i;
-    for (i = 0; i < c->p->nletters; i++) {
-        if (c->digit[i] == 0 && c->p->nonzero[i])
-            return 0;
+    for (i = 0; i < c->p->nletters; i++)
         sum += c->coef[i] * c->digit[i];
-    }
     return sum == 0;
 }
 
@@ -160,7 +157,7 @@ static int dfs(Ctx *c, int k){
     int d;
     if (k == c->p->nletters)
         return check(c);
-    for (d = 0; d < 10; d++) {
+    for (d = c->p->nonzero[k] ? 1 : 0; d < 10; d++) {
         if (c->used[d])
             continue;
         c->used[d] = 1;
